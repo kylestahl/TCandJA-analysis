@@ -1,0 +1,652 @@
+---
+title: "Tax Bracket Analysis"
+author: "Kyle Stahl"
+date: "January 10, 2018"
+output: html_document
+---
+_Link back to the website:_ https://www.kyle-stahl-mn.com
+```{r Define_Multiplot,echo=FALSE}
+# Source: http://www.cookbook-r.com/Graphs/Multiple_graphs_on_one_page_(ggplot2)/
+# Multiple plot function
+#
+# ggplot objects can be passed in ..., or to plotlist (as a list of ggplot objects)
+# - cols:   Number of columns in layout
+# - layout: A matrix specifying the layout. If present, 'cols' is ignored.
+#
+# If the layout is something like matrix(c(1,2,3,3), nrow=2, byrow=TRUE),
+# then plot 1 will go in the upper left, 2 will go in the upper right, and
+# 3 will go all the way across the bottom.
+#
+multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
+  library(grid)
+
+  # Make a list from the ... arguments and plotlist
+  plots <- c(list(...), plotlist)
+
+  numPlots = length(plots)
+
+  # If layout is NULL, then use 'cols' to determine layout
+  if (is.null(layout)) {
+    # Make the panel
+    # ncol: Number of columns of plots
+    # nrow: Number of rows needed, calculated from # of cols
+    layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
+                    ncol = cols, nrow = ceiling(numPlots/cols))
+  }
+
+ if (numPlots==1) {
+    print(plots[[1]])
+
+  } else {
+    # Set up the page
+    grid.newpage()
+    pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
+
+    # Make each plot, in the correct location
+    for (i in 1:numPlots) {
+      # Get the i,j matrix positions of the regions that contain this subplot
+      matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
+
+      print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,
+                                      layout.pos.col = matchidx$col))
+    }
+  }
+}
+```
+
+```{r,include=FALSE}
+library(magrittr)
+library(dplyr)
+library(ggplot2)
+library(plotly)
+```
+
+
+## Introduction 
+Congress passed a new tax bill that will take effect in 2018. This might feel counter intuitive to some people because congress actually did something... which hasn't really ever happened. This analysis will walk through how your effective tax rate will change for individuals.       
+
+Aside from the whole *"simplifying the tax code"* goal, it can actually be quite complicated to know how it effects you. We will first talk about the changes in different deductions for 2018 that may change the way you itemize/don't itemize. Then we will go into how the effective tax rates will change at each income level. Finally, we will wrap up with how the new tax laws could affect small/large businesses. One thing to keep in mind is that many of the tax changes for individuals **will expire in 2025**, but the corperate tax cuts do not. Many of the dollar amounts stated in the bill will change over time and be adjusted for inflation for the duration of the tax bill.         
+
+Many different news websites have embeded pdf viewers for the full verision of the bill. I'll be referencing the version posted by House on December 12th, 2017 at this web address: http://docs.house.gov/billsthisweek/20171218/CRPT-115HRPT-466.pdf. The first sentence under the title says to cite the report as the *"Tax Cuts and Jobs Act"* So I suppose that is what we shall call it.    
+
+## Deductions
+
+#### __Standard Deduction__      
+Possibly the most notable change for people outside of the change in tax rates. This is the main reason why the GOP is claiming to "simplify" the 1,000 pages of tax policy. The standard deduction will almost double from what it is currently. ~ \$6,000 to \$12,000 for people filing individually, from ~ \$12,000 to $24,000 for filing jointly, and ~ \$9,000 to \$18,000 for head of house hold _(page 50 Tax Cuts and Jobs Act Part III section 11021)_.       
+
+This makes it much more enticing to not itemize all you deductions and just take the lump sum standard deduction that is available to everyone. Which yes, is much simpler. If you have been taking the standard deduction in the past, continuing with the standard deduction is still most likely the best course for you in the future. If you itemize your deductions, you will need to look at some of the following changes in rules to how you can claim some of the following deductions.
+
+#### __Child Tax Credit__      
+The first thing to point out about the child tax credit is that it is in fact a _credit_ rather than a deduction. A deduction reduces the amount of your income that is subject to tax, whereas a tax credit is dollar-for-dollar money back in your pocket. This credit is double from \$1,000 to \$2,000 __per child.__ _(page 51 Tax Cuts and Jobs Act Part III section 11022)_ 
+
+If your taxable income ends up to be \$0.00 and you have children, up to $1,400 of this tax credit is refundable. Non-refundable tax credits will bring your tax bill all the way down to \$0.00, but not over that. With a refundable tax credit, the government could actually owe you money. 
+
+#### __Charitable Donations__
+Charitable donations are still tax deductable up to 60% of your "contribution base for such year" _(page 54 Tax Cuts and Jobs Act Part III section 11023)_. This is up from 50% in prior years. You may have seen some headlines or people yelling at you from the news desk worrying that charitable contributions may decrease. This fear is solely due to the increase in the standard deduction is likely to make fewer people itemize their deductions. And one motivation that gets people increase their donations to charity is that it is tax deductible __only when you itemize your deductions__. So tax some middle class tax payers will have to make a difficult choice on whether to take the higher standard deduction, or to itemize and deduct charitable donations. 
+
+#### __Higher Education__
+The house version of the tax plan repealed a students ability to deduct up to $2,500 of interest paid on student loans per year. The senate version of the bill kept this deduction. The conference commitee sided with the senate. _(Tax Cuts and Jobs Act Title I Part C Point 12 page 66 of Conference Commitee)_        
+
+A 529 plan is a way for parents to put money away for their childerns college fund. I found an overview of different types of 529 education investment account at this link: https://studentloanhero.com/featured/what-is-a-529-plan-saving-college-bank-terrible-idea/. In essence, you can put money aside into a fairly non-volatile investment account for a future beneficiaries college fund (doesn't neccessarily have to be your offspring). The money put into the account is not tax deductible at the federal level (it might be on your state taxes); but the interest earned on the account to be used for education is tax free. Otherwise it would be subject to 15% capital gains tax. The new bill does put a cap of $10,000 of tax free income used per student per fiscal year.
+
+#### __Mortgages__
+This gets a little tricky. Prior to 2018 you could deduct all interest paid on mortgage loans for first and second "residence." A qualified residence is then loosely defined as a house, condominium, cooperative, mobile home, house trailer, or boat. Then it differentiates between "aquisition" loans and "home equity loans". Aquisition loans are mortgages used to first buy or aquire a home, and home equity loans are second mortgages where the house is used as collateral for the money, and the money could be spent on anything, not just the home. The old maximum deduction for combination of these interest deductions was \$1,000,000 for a joint filing and \$550,000 for someone filing individually.      
+
+Now from 2018 - 2025, the home equity interest deduction is suspended. Meaning you can not deduct the interest on loans where the house is put up as collateral. The suspension of this deduction happens in 2026. Also, the maximum amount of principle on __aquisition loans__ that can be considered to deduct the accured interest is lowered from \$1,000,000 to \$750,000. Mortgages that were taken out before December 15th, 2017 are grandfathered in at the \$1,000,000 level. For example, if you took out a mortgage __to buy__ a \$1,500,000 home in November of 2017, the accured interest on \$1,000,000 of that \$1.5 Million would be tax deductible. But, if that same mortgage happened in January 2018 only accured interest on \$750,000 of that is deductible. _(Tax Cuts and Jobs Act Title I Part D Point 1 page 76 of Conference Commitee)_
+
+#### __Health Insurance__
+The Patient Protection and Afforable Care Act created a tax penalty for not having a minimal essential coverage health plan. There was a lot that went into calculating how much this fine would be for an individual person; it actually goes by number of months without health insurence. The annual amount for an adult would be \$695. We won't go too much into the weeds into how it is calculated because it is mute now. The new tax bill sets the penalty down to $0.00.     
+
+Just a somewhat fun fact... The individual mandate still exists in the ACA, but the fine for not having insurence is reduced to 0.
+
+
+#### __State and Local Taxes (SALT)__
+Previously, all individuals and businesses could deduct taxes they paid to state, local, and foriegn property from their federal taxes returns. Now businesses can still take these deductions, but indivduals will have a cap of a \$10,000 deduction on these taxes until 2026.      
+```{r, echo=FALSE}
+salt <- read.csv("C:\\Users\\kyles\\Desktop\\SALT.csv")
+write.table(salt, "C:\\Users\\kyles\\Desktop\\SALT.txt", 
+            sep = " | ", row.names = FALSE,quote = FALSE)
+salt <- read.csv("C:\\Users\\kyles\\Desktop\\SALT2.csv")
+```
+
+This mostly affects individuals in states and local communities with high taxes. Specifically high tax + high income states and communities for people who get taxed more than \$10,000 by their local communities. Below is a table of states with the highest state tax rates from January 2017, and their average local tax rates.
+
+
+| State | State Tax Rate | Avg  Local Tax Rate | Combined Rate | Combined Rank |
+|-------|----------------|---------------------|---------------|---------------|
+| California | 7.25% | 1.00% | 8.25% | 10 | 
+| Indiana | 7.00% | 0.00% | 7.00% | 21 |
+| Mississippi | 7.00% | 0.07% | 7.07% | 20 |
+| Rhode Island | 7.00% | 0.00% | 7.00% | 21 |
+| Tennessee | 7.00% | 2.46% | 9.46% | 2 |
+| Minnesota | 6.88% | 0.42% | 7.30% | 17 |
+| New Jersey | 6.88% | -0.03% | 6.85% | 26 |
+| Nevada | 6.85% | 1.13% | 7.98% | 13 | 
+| Arkansas | 6.50% | 2.80% | 9.30% | 3 |
+| Kansas | 6.50% | 2.12% | 8.62% | 8 |
+| Washington | 6.50% | 2.42% | 8.92% | 5 |
+| Connecticut | 6.35% | 0.00% | 6.35% | 32 |
+| Illinois | 6.25% | 2.39% | 8.64% | 7 |
+| Massachusetts | 6.25% | 0.00% | 6.25% | 35 |
+| Texas | 6.25% | 1.94% | 8.19% | 12 |
+| Florida | 6.00% | 0.80% | 6.80% | 28 |
+| Idaho | 6.00% | 0.03% | 6.03% | 37 |
+| Iowa | 6.00% | 0.80% | 6.80% | 27 |  
+| Kentucky | 6.00% | 0.00% | 6.00% | 38 |
+| Maryland | 6.00% | 0.00% | 6.00% | 38 |
+| Michigan | 6.00% | 0.00% | 6.00% | 38 |
+| Pennsylvania | 6.00% | 0.34% | 6.34% | 33 |
+| South Carolina | 6.00% | 1.22% | 7.22% | 18 |
+| Vermont | 6.00% | 0.18% | 6.18% | 36 |
+| West Virginia | 6.00% | 0.29% | 6.29% | 34 |
+| Utah | 5.95% | 0.81% | 6.76% | 30 |
+| Ohio | 5.75% | 1.39% | 7.14% | 19 | 
+| D.C. | 5.75% | 0.00% | 5.75% | (41) | 
+| Arizona | 5.60% | 2.65% | 8.25% | 11 | 
+| Maine | 5.50% | 0.00% | 5.50% | 42 | 
+| Nebraska | 5.50% | 1.39% | 6.89% | 25 |
+| Virginia | 5.30% | 0.33% | 5.63% | 41 | 
+| New Mexico | 5.13% | 2.43% | 7.55% | 15 |
+| Louisiana | 5.00% | 4.98% | 9.98% | 1 | 
+| North Dakota | 5.00% | 1.78% | 6.78% | 29 |
+| Wisconsin | 5.00% | 0.42% | 5.42% | 43 |
+| North Carolina | 4.75% | 2.15% | 6.90% | 24 |
+| Oklahoma | 4.50% | 4.36% | 8.86% | 6 |
+| South Dakota | 4.50% | 1.89% | 6.39% | 31 |
+| Missouri | 4.23% | 3.66% | 7.89% | 14 |
+| Alabama | 4.00% | 5.01% | 9.01% | 4 |
+| Georgia | 4.00% | 3.00% | 7.00% | 23 |
+| Hawaii | 4.00% | 0.35% | 4.35% | 45 |
+| New York | 4.00% | 4.49% | 8.49% | 9 |
+| Wyoming | 4.00% | 1.40% | 5.40% | 44 |
+| Colorado | 2.90% | 4.60% | 7.50% | 16 |
+| Alaska | 0.00% | 1.76% | 1.76% | 46 |
+| Delaware | 0.00% | 0.00% | 0.00% | 47 |
+| Montana | 0.00% | 0.00% | 0.00% | 47 |
+| New Hampshire | 0.00% | 0.00% | 0.00% | 47 |
+| Oregon | 0.00% | 0.00% | 0.00% | 47 |
+
+*source: https://taxfoundation.org/state-and-local-sales-tax-rates-in-2017 *
+
+Here is a density plot for the 50 different state tax rates.
+```{r echo=FALSE}
+ggplot() + geom_density(aes(x=salt$State.Tax.Rate),
+                        fill = 'skyblue',
+                        color= 'royalblue',
+                        alpha= 0.75) +
+  theme_minimal() + 
+  theme(text=element_text(family = "serif",size=14)) +
+  theme(plot.title = element_text(hjust=0.5)) +
+  xlab("State Tax Rates") + ylab("Density") +
+  ggtitle("U.S. State Tax Rates Density Plot")
+```
+
+#### __Personal Exemption__
+Prior to 2018, there was such a thing called personal exemptions (not to be confused with the standard deduction). The personal exemption is effectively the same thing as a deduction; but a person may take the personal exemption (\$4,050 in 2017) regardless if they itemized or took the standard deduction. Each person gets 1 and only 1 exemption, but parents who claim their childern can take the child's exemption off their income. Or more generally, any person can take their dependents personal exemption, and if you are claimed as a dependent you will not get to claim your own personal exmeption. 
+
+Quick, very simple example: a family of four in 2017 who filed jointly and took the standard would be able to deduct \$12,700 for the joint standard deduction and then (\$4,050 \* 4 =) \$16,200 for the personal exemptions of the two parents and two childern. This totals up to \$28,900 in adjustable gross income (AGI) deductions. If the childern worked in 2017, they would get to claim their deductions (probably the \$6,350 standard deduction), but they **_would not get their personal exemption_** because they are being claimed by someone else. From 2018 to 2025 (when the tax plan expires for personal taxes), the family would now just get the newly doubled standard deduction of \$24,000. The family would also profit \$1,000 per child with the doubling of the child tax credit mentioned above. _(Tax Cuts and Jobs Act Title I Part A Point 2 page 15 of Conference Commitee)_
+
+
+
+## Effective Tax Rates
+There used to be 7 tax brackets. The plan for the GOP was to simplify the tax code and hopefully reduce the number of tax brackets to make it easier to calculate. The Tax Cuts and Jobs Act reduces the number of brackets from 7 to 7. Which didn't actually make things any simpler to calculate... But I calculate it anyway so here you go. If you are slightly confused between *tax bracket* and *effective tax rate* this link explains it well: https://www.hrblock.com/tax-center/irs/tax-brackets-and-rates/what-is-tax-rate-bracket/
+
+
+#### __Filing Individually__
+| Tax Bracket | Old Minimum | Old Rate | New Minimum | New Rate |
+| ----------- | ----------- | -------- | ----------- | -------- |
+| 1 | \$0.00 | 10% | \$0.00 | 10% |
+| 2 | \$9,325 | 15% | \$9,525 | 12% |
+| 3 | \$37,950 | 25% | \$38,700 | 22% |
+| 4 | \$91,900 | 28% | \$82,500 | 24% |
+| 5 | \$191,650 | 33% | \$157,500 | 32% |
+| 6 | \$416,700 | 35% | \$200,000 | 35% |
+| 7 | \$418,400 | 39.60% | \$500,000 | 37% |
+
+The first two plots below show the tax brackets and effective rates for 2017 and 2018. We can see that the brackets are pretty much the same, the new plan just knocks down the rates at each bracket a few percentages.    
+
+The second plot is an interactive graph showing the difference in effective tax rates for each incomes \$0.00 - \$2,000,000. You can select an area to zoom in, and hover over points to see the exact values and the difference between them.
+
+
+```{r, echo=FALSE}
+salt <- read.csv("C:\\Users\\kyles\\Desktop\\independantly.csv")
+write.table(salt, "C:\\Users\\kyles\\Desktop\\independantly.txt", 
+            sep = " | ", row.names = FALSE,quote = FALSE)
+```
+
+```{r Single, echo=FALSE,message=FALSE}
+income <- seq(1000,2000000,1000)
+
+old_effective_rates <- rep(NA, length(income))
+old_brackets <- rep(NA, length(income))
+
+get_old_effective_rate <- function(salary){
+  effrate <- NA
+  if (salary < 9325) {effrate <- 0.1 * salary}
+  else if (salary < 37950) {effrate <- 932.5 + 0.15 * (salary - 9325)}
+  else if (salary < 91900) {effrate <- 5226.25 + 0.25 * (salary - 37950)}
+  else if (salary < 191650) {effrate <- 18713.75 + 0.28 * (salary - 91900)}
+  else if (salary < 416700) {effrate <- 46643.75 + 0.33 * (salary - 191650)}
+  else if (salary < 418400) {effrate <- 120910.25 + 0.35 * (salary - 416700)}
+  else {effrate <- 121505.25 + 0.396 * (salary - 418400)}
+  effrate <- effrate / salary
+  
+  return(effrate)
+}
+
+get_old_bracket <- function(salary){
+  rate <- NA
+  if (salary < 9275) {rate <- 0.1}
+  else if (salary < 37650) {rate <- 0.15}
+  else if (salary < 91150) {rate <- 0.25}
+  else if (salary < 190150) {rate <- 0.28}
+  else if (salary < 413305) {rate <- 0.33}
+  else if (salary < 415050) {rate <- 0.35}
+  else {rate <- 0.396}
+
+  return(rate)
+}
+
+for (i in seq(length(income)))
+{
+  old_effective_rates[i] <- get_old_effective_rate(income[i])
+  old_brackets[i] <- get_old_bracket(income[i])
+}
+
+old<-ggplot() +
+  geom_line(aes(x=income,y=old_effective_rates), color='navyblue') +
+  geom_line(aes(x=income,y=old_brackets),color='skyblue') +
+  theme_minimal() + 
+  theme(text=element_text(family = "serif",size=14)) +
+  theme(plot.title = element_text(hjust=0.5)) +
+  ylab("2017 Tax Brackets") + xlab("") +
+  ggtitle("Filing Individually") + 
+  ggplot2::annotate("text",x=252000,y=.35,label="Tax Bracket",color='skyblue') +
+  ggplot2::annotate("text",x=620000,y=.305,
+                    label="Effective Rate",color='navyblue',angle=10)
+
+new_effective_rates <- rep(NA, length(income))
+new_brackets <- rep(NA, length(income))
+
+get_new_effective_rate <- function(salary){
+  effrate <- NA
+  if (salary < 9525) {effrate <- 0.1 * salary}
+  else if (salary < 38700) {effrate <- 952.5 + 0.12 * (salary - 9525)}
+  else if (salary < 82500) {effrate <- 4453.5 + 0.22 * (salary - 38700)}
+  else if (salary < 157500) {effrate <- 14089.5 + 0.24 * (salary - 82500)}
+  else if (salary < 200000) {effrate <- 32089.5 + 0.32 * (salary - 157500)}
+  else if (salary < 500000) {effrate <- 45689.5 + 0.35 * (salary - 200000)}
+  else {effrate <- 150689.5 + 0.37 * (salary - 500000)}
+  effrate <- effrate / salary
+  
+  return(effrate)
+}
+get_new_bracket <- function(salary){
+  rate <- NA
+  if (salary < 9275) {rate <- 0.1}
+  else if (salary < 37650) {rate <- 0.12}
+  else if (salary < 91150) {rate <- 0.22}
+  else if (salary < 190150) {rate <- 0.24}
+  else if (salary < 413305) {rate <- 0.32}
+  else if (salary < 415050) {rate <- 0.35}
+  else {rate <- 0.37}
+
+  return(rate)
+}
+
+for (i in seq(length(income)))
+{
+  new_effective_rates[i] <- get_new_effective_rate(income[i])
+  new_brackets[i] <- get_new_bracket(income[i])
+}
+
+new<-ggplot() +
+  geom_line(aes(x=income,y=new_effective_rates), color='firebrick4') +
+  geom_line(aes(x=income,y=new_brackets),color='red') +
+  theme_minimal() + 
+  theme(text=element_text(family = "serif",size=14)) +
+  theme(plot.title = element_text(hjust=0.5)) +
+  ylab("2018 Tax Brackets") + xlab("Adjustable Gross Income (AGI)") +
+  #ggtitle("Filing Individually") + 
+  ggplot2::annotate("text",x=252000,y=.35,label="Tax Bracket",color='red') +
+  ggplot2::annotate("text",x=620000,y=.30,
+                    label="Effective Rate",color='firebrick4',angle=10)
+
+multiplot(old,new)
+
+old_effective_rates %<>% round(4)
+new_effective_rates %<>% round(4) 
+old_effective_rates <- old_effective_rates *100
+new_effective_rates <- new_effective_rates *100
+difference <- old_effective_rates - new_effective_rates
+
+(ggplot() +
+  geom_line(aes(x=income,y=old_effective_rates),color='navyblue') +
+  geom_line(aes(x=income,y=new_effective_rates),color='firebrick4') +
+  geom_area(aes(x=income,y=difference),fill='seagreen') +
+  theme_minimal() + 
+  theme(text=element_text(family = "serif",size=14)) +
+  theme(plot.title = element_text(hjust=0.5)) +
+  ggtitle("2017 vs. 2018 Tax Rates for Filing Individually") +
+  xlab("Adjustable Gross Income ($)") +
+  ylab("Effective Tax Rate (%)") +
+  ggplot2::annotate("text",x=890000,y=36.5,
+                    label="2017 Effective Rate",color='navyblue',angle=10) +
+  ggplot2::annotate("text",x=1100000,y=32,
+                    label="2018 Effective Rate",color='firebrick4',angle=5) +
+  ggplot2::annotate("text",x=1000000,y=2.75,label="Difference",color='seagreen'))%>% ggplotly()
+```
+
+
+
+#### __Filing Jointly__
+The analysis for filing jointly will pretty much replicate fililng individually. The number of tax brackets and their percentages remain the same. But the income level to get to those tax brackets is approximately doubled.
+
+| Tax Bracket | Old Minimum | Old Rate | New Minimum | New Rate |
+| ----------- | ----------- | -------- | ----------- | -------- |
+| 1 | \$0.00 | 10% | \$0.00 | 10% |
+| 2 | \$18,650 | 15% | \$19,050 | 12% |
+| 3 | \$75,900 | 25% | \$77,400 | 22% |
+| 4 | \$153,100 | 28% | \$165,000 | 24% |
+| 5 | \$233,350 | 33% | \$315,000 | 32% |
+| 6 | \$416,700 | 35% | \$400,000 | 35% |
+| 7 | \$418,400 | 39.60% | \$600,000 | 37% |
+
+```{r Joint, echo=FALSE,message=FALSE}
+income <- seq(1000,2000000,1000)
+
+old_effective_rates <- rep(NA, length(income))
+old_brackets <- rep(NA, length(income))
+
+get_old_effective_rate <- function(salary){
+  effrate <- NA
+  if (salary < 18650) {effrate <- 0.1 * salary}
+  else if (salary < 75900) {effrate <- 1865 + 0.15 * (salary - 18650)}
+  else if (salary < 153100) {effrate <- 10452.50 + 0.25 * (salary - 75900)}
+  else if (salary < 233350) {effrate <- 29752.50 + 0.28 * (salary - 153100)}
+  else if (salary < 416700) {effrate <- 52222.50 + 0.33 * (salary - 233350)}
+  else if (salary < 470700) {effrate <- 112728 + 0.35 * (salary - 416700)}
+  else {effrate <- 131628 + 0.396 * (salary - 470700)}
+  effrate <- effrate / salary
+  
+  return(effrate)
+}
+
+
+
+get_old_bracket <- function(salary){
+  rate <- NA
+  if (salary < 18650) {rate <- 0.1}
+  else if (salary < 75900) {rate <- 0.15}
+  else if (salary < 153100) {rate <- 0.25}
+  else if (salary < 233350) {rate <- 0.28}
+  else if (salary < 416700) {rate <- 0.33}
+  else if (salary < 470700) {rate <- 0.35}
+  else {rate <- 0.396}
+
+  return(rate)
+}
+
+for (i in seq(length(income)))
+{
+  old_effective_rates[i] <- get_old_effective_rate(income[i])
+  old_brackets[i] <- get_old_bracket(income[i])
+}
+
+old<-ggplot() +
+  geom_line(aes(x=income,y=old_effective_rates), color='navyblue') +
+  geom_line(aes(x=income,y=old_brackets),color='skyblue') +
+  theme_minimal() + 
+  theme(text=element_text(family = "serif",size=14)) +
+  theme(plot.title = element_text(hjust=0.5)) +
+  ylab("2017 Tax Brackets") + xlab("") +
+  ggtitle("Filing Jointly") + 
+  ggplot2::annotate("text",x=252000,y=.35,label="Tax Bracket",color='skyblue') +
+  ggplot2::annotate("text",x=650000,y=.285,
+                    label="Effective Rate",color='navyblue',angle=10)
+
+new_effective_rates <- rep(NA, length(income))
+new_brackets <- rep(NA, length(income))
+
+get_new_effective_rate <- function(salary){
+  effrate <- NA
+  if (salary < 19050) {effrate <- 0.1 * salary}
+  else if (salary < 77400) {effrate <- 1905 + 0.12 * (salary - 19050)}
+  else if (salary < 165000) {effrate <- 8907 + 0.22 * (salary - 77400)}
+  else if (salary < 315000) {effrate <- 28179 + 0.24 * (salary - 165000)}
+  else if (salary < 400000) {effrate <- 64179 + 0.32 * (salary - 315000)}
+  else if (salary < 600000) {effrate <- 91379 + 0.35 * (salary - 400000)}
+  else {effrate <- 161379 + 0.37 * (salary - 600000)}
+  effrate <- effrate / salary
+  
+  return(effrate)
+}
+
+get_new_bracket <- function(salary){
+  rate <- NA
+  if (salary < 19050) {rate <- 0.1}
+  else if (salary < 77400) {rate <- 0.12}
+  else if (salary < 165000) {rate <- 0.22}
+  else if (salary < 315000) {rate <- 0.24}
+  else if (salary < 400000) {rate <- 0.32}
+  else if (salary < 600000) {rate <- 0.35}
+  else {rate <- 0.37}
+
+  return(rate)
+}
+
+for (i in seq(length(income)))
+{
+  new_effective_rates[i] <- get_new_effective_rate(income[i])
+  new_brackets[i] <- get_new_bracket(income[i])
+}
+
+new<-ggplot() +
+  geom_line(aes(x=income,y=new_effective_rates), color='firebrick4') +
+  geom_line(aes(x=income,y=new_brackets),color='red') +
+  theme_minimal() + 
+  theme(text=element_text(family = "serif",size=14)) +
+  theme(plot.title = element_text(hjust=0.5)) +
+  ylab("2018 Tax Brackets") + xlab("Adjustable Gross Income (AGI)") +
+  #ggtitle("Filing Individually") + 
+  ggplot2::annotate("text",x=252000,y=.35,label="Tax Bracket",color='red') +
+  ggplot2::annotate("text",x=620000,y=.30,
+                    label="Effective Rate",color='firebrick4',angle=10)
+
+multiplot(old,new)
+
+old_effective_rates %<>% round(4)
+new_effective_rates %<>% round(4) 
+old_effective_rates <- old_effective_rates *100
+new_effective_rates <- new_effective_rates *100
+difference <- old_effective_rates - new_effective_rates
+
+(ggplot() +
+  geom_line(aes(x=income,y=old_effective_rates),color='navyblue') +
+  geom_line(aes(x=income,y=new_effective_rates),color='firebrick4') +
+  geom_area(aes(x=income,y=difference),fill='seagreen') +
+  theme_minimal() + 
+  theme(text=element_text(family = "serif",size=14)) +
+  theme(plot.title = element_text(hjust=0.5)) +
+  ggtitle("2017 vs. 2018 Tax Rates for Filing Jointly") +
+  xlab("Adjustable Gross Income ($)") +
+  ylab("Effective Tax Rate (%)") +
+  ggplot2::annotate("text",x=890000,y=36.5,
+                    label="2017 Effective Rate",color='navyblue',angle=10) +
+  ggplot2::annotate("text",x=1350000,y=30,
+                    label="2018 Effective Rate",color='firebrick4',angle=5) +
+  ggplot2::annotate("text",x=1000000,y=4.5,label="Difference",color='seagreen'))%>% ggplotly()
+```
+
+
+#### __Head of Household__
+And likewise for head of household...
+
+| Tax Bracket | Old Minimum | Old Rate | New Minimum | New Rate |
+| ----------- | ----------- | -------- | ----------- | -------- |
+| 1 | \$0.00 | 10% | $0.00 | 10% |
+| 2 | \$13,250 | 15% | \$13,600 | 12% |
+| 3 | \$50,400 | 25% | \$51,800 | 22% |
+| 4 | \$130,150 | 28% | \$82,500 | 24% |
+| 5 | \$210,800 | 33% | \$157,500 | 32% |
+| 6 | \$413,350 | 35% | \$200,000 | 35% |
+| 7 | \$441,000 | 39.60% | \$500,000 | 37% |
+
+
+```{r HeadofHousehold, echo=FALSE,message=FALSE}
+income <- seq(1000,2000000,1000)
+
+old_effective_rates <- rep(NA, length(income))
+old_brackets <- rep(NA, length(income))
+
+get_old_effective_rate <- function(salary){
+  effrate <- NA
+  if (salary < 13250) {effrate <- 0.1 * salary}
+  else if (salary < 50400) {effrate <- 1325 + 0.15 * (salary - 13250)}
+  else if (salary < 130150) {effrate <- 6897.50 + 0.25 * (salary - 50400)}
+  else if (salary < 210800) {effrate <- 26835 + 0.28 * (salary - 130150)}
+  else if (salary < 413350) {effrate <- 49417 + 0.33 * (salary - 210800)}
+  else if (salary < 441000) {effrate <- 116258.50 + 0.35 * (salary - 413350)}
+  else {effrate <- 125936 + 0.396 * (salary - 441000)}
+  effrate <- effrate / salary
+  
+  return(effrate)
+}
+
+get_old_bracket <- function(salary){
+  rate <- NA
+  if (salary < 13250) {rate <- 0.1}
+  else if (salary < 50400) {rate <- 0.15}
+  else if (salary < 130150) {rate <- 0.25}
+  else if (salary < 210800) {rate <- 0.28}
+  else if (salary < 413350) {rate <- 0.33}
+  else if (salary < 441000) {rate <- 0.35}
+  else {rate <- 0.396}
+
+  return(rate)
+}
+
+
+for (i in seq(length(income)))
+{
+  old_effective_rates[i] <- get_old_effective_rate(income[i])
+  old_brackets[i] <- get_old_bracket(income[i])
+}
+
+old<-ggplot() +
+  geom_line(aes(x=income,y=old_effective_rates), color='navyblue') +
+  geom_line(aes(x=income,y=old_brackets),color='skyblue') +
+  theme_minimal() + 
+  theme(text=element_text(family = "serif",size=14)) +
+  theme(plot.title = element_text(hjust=0.5)) +
+  ylab("2017 Tax Brackets") + xlab("") +
+  ggtitle("Filing as Head of Household") + 
+  ggplot2::annotate("text",x=252000,y=.35,label="Tax Bracket",color='skyblue') +
+  ggplot2::annotate("text",x=650000,y=.285,
+                    label="Effective Rate",color='navyblue',angle=10)
+
+new_effective_rates <- rep(NA, length(income))
+new_brackets <- rep(NA, length(income))
+
+get_new_effective_rate <- function(salary){
+  effrate <- NA
+  if (salary < 13600) {effrate <- 0.1 * salary}
+  else if (salary < 51800) {effrate <- 1360 + 0.12 * (salary - 13600)}
+  else if (salary < 82500) {effrate <- 5944 + 0.22 * (salary - 51800)}
+  else if (salary < 157500) {effrate <- 12698 + 0.24 * (salary - 82500)}
+  else if (salary < 200000) {effrate <- 30698 + 0.32 * (salary - 157500)}
+  else if (salary < 500000) {effrate <- 44298 + 0.35 * (salary - 200000)}
+  else {effrate <- 149298 + 0.37 * (salary - 500000)}
+  effrate <- effrate / salary
+  
+  return(effrate)
+}
+
+get_new_bracket <- function(salary){
+  rate <- NA
+  if (salary < 13600) {rate <- 0.1}
+  else if (salary < 51800) {rate <- 0.12}
+  else if (salary < 82500) {rate <- 0.22}
+  else if (salary < 157500) {rate <- 0.24}
+  else if (salary < 200000) {rate <- 0.32}
+  else if (salary < 500000) {rate <- 0.35}
+  else {rate <- 0.37}
+
+  return(rate)
+}
+
+for (i in seq(length(income)))
+{
+  new_effective_rates[i] <- get_new_effective_rate(income[i])
+  new_brackets[i] <- get_new_bracket(income[i])
+}
+
+new<-ggplot() +
+  geom_line(aes(x=income,y=new_effective_rates), color='firebrick4') +
+  geom_line(aes(x=income,y=new_brackets),color='red') +
+  theme_minimal() + 
+  theme(text=element_text(family = "serif",size=14)) +
+  theme(plot.title = element_text(hjust=0.5)) +
+  ylab("2018 Tax Brackets") + xlab("Adjustable Gross Income (AGI)") +
+  #ggtitle("Filing Individually") + 
+  ggplot2::annotate("text",x=290000,y=.37,label="Tax Bracket",color='red') +
+  ggplot2::annotate("text",x=630000,y=.295,
+                    label="Effective Rate",color='firebrick4',angle=10)
+
+multiplot(old,new)
+
+old_effective_rates %<>% round(4)
+new_effective_rates %<>% round(4) 
+old_effective_rates <- old_effective_rates *100
+new_effective_rates <- new_effective_rates *100
+difference <- old_effective_rates - new_effective_rates
+
+(ggplot() +
+  geom_line(aes(x=income,y=old_effective_rates),color='navyblue') +
+  geom_line(aes(x=income,y=new_effective_rates),color='firebrick4') +
+  geom_area(aes(x=income,y=difference),fill='seagreen') +
+  theme_minimal() + 
+  theme(text=element_text(family = "serif",size=14)) +
+  theme(plot.title = element_text(hjust=0.5)) +
+  ggtitle("2017 vs. 2018 Tax Rates for Filing as \n Head of Household") +
+  xlab("Adjustable Gross Income ($)") +
+  ylab("Effective Tax Rate (%)") +
+  ggplot2::annotate("text",x=890000,y=36.5,
+                    label="2017 Effective Rate",color='navyblue',angle=10) +
+  ggplot2::annotate("text",x=1350000,y=33,
+                    label="2018 Effective Rate",color='firebrick4',angle=5) +
+  ggplot2::annotate("text",x=1000000,y=3.5,label="Difference",color='seagreen'))%>% ggplotly()
+```
+
+
+
+## Business Taxes
+Unlike the changes to personal taxes that will expire in 2025, the business tax changes are permanent. Many of the changes to the business tax code were aimed to give business's more money to re-invest into more jobs and higher paying jobs, hence the name "Tax Cuts and Jobs Act".
+
+#### __Business Tax Rate and Structure__
+Currently, prior to 2018, business taxes worked in a similar fashion to personal taxes with a graduated rate structure that follows:
+
+| Taxable Income | Tax Rate |
+| -------------- | -------- |
+| \$0.00 - \$50,000 | 15% |
+| \$50,000 - \$75,000 | 25% |
+| \$75,000 - \$10,000,000 | 34% |
+| \$10,000,000 + | 35% |
+
+Certain personal service corporations may be required to pay their entire taxable income ar 35%. 
+
+The new corporate tax structure eliminates the graduated rate structure and taxes all corporations at 21% _(Tax Cuts and Jobs Act Title II Part A Point 1 page 174 of Conference Commitee)_. 
+
+
+#### __Pass through income deduction__
+Since big corporations get a tax cut, it was only fair to give a tax cut to small companies as well. Pass through organizations are small private companies, where the business income is taxed as it is the income of the owner(s) at the personal tax rate. This exsits so small business's don't get doubled taxed. Now these pass through organizations will be able to deduct 20% of qualified their business income.     
+
+"For taxable years beginning after December 31, 2017 and before January 1, 2026, an individual taxpayer generally may deduct 20 percent of qualified business income from a partnership, S corporation, or sole proprietorship... " _(Tax Cuts and Jobs Act Title I Part B Point 1 page 20 of Conference Commitee)_.
+
+#### __Other__
+I am currently not a business, nor do I regularly do business taxes (yet). So for further information on changes to business tax law I would suggest the following articles:      
+ * https://www.journalofaccountancy.com/news/2017/dec/tax-reform-bill-changes-for-businesses-201718071.html     
+ * https://www.marketwatch.com/story/top-10-tax-changes-for-business-owners-2017-12-29       
+ * https://www.forbes.com/sites/kellyphillipserb/2017/12/22/what-tax-reform-means-for-small-businesses-pass-through-entities/#3123dee66de3      
+
+
